@@ -176,6 +176,8 @@ export class QuickQuoteView {
 
     handleTableCellClick({ rowIndex, column }) {
         this.stateService.dispatch(uiActions.setActiveCell(rowIndex, column));
+        // [MODIFIED] This line was the source of the selection bug and is now removed.
+        // this.stateService.dispatch(uiActions.clearMultiSelectSelection());
         
         const item = this._getItems()[rowIndex];
         if (item && (column === 'width' || column === 'height')) {
