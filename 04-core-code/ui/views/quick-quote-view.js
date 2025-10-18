@@ -95,6 +95,13 @@ export class QuickQuoteView {
         }
 
         const selectedIndex = multiSelectSelectedIndexes[0];
+        
+        // [REVISED] Add check for last populated row
+        if (selectedIndex === items.length - 2) {
+            this.eventAggregator.publish(EVENTS.SHOW_NOTIFICATION, { message: 'Cannot insert a row below the last data entry row.' });
+            return;
+        }
+
         const nextItem = items[selectedIndex + 1];
 
         if (nextItem && (!nextItem.width && !nextItem.height && !nextItem.fabricType)) {
@@ -120,25 +127,29 @@ export class QuickQuoteView {
         this.focusService.focusAfterDelete();
     }
 
-    // [REVISED] Show confirmation dialog for clear/delete actions.
+    // [REVISED] Show confirmation dialog for clear/delete actions, restricted to single selection.
     handleClearRow() {
         const { ui } = this._getState();
         const { multiSelectSelectedIndexes } = ui;
-        if (multiSelectSelectedIndexes.length === 0) {
-            this.eventAggregator.publish(EVENTS.SHOW_NOTIFICATION, { message: 'Please select one or more rows first.' });
+
+        if (multiSelectSelectedIndexes.length !== 1) {
+            this.eventAggregator.publish(EVENTS.SHOW_NOTIFICATION, { message: 'Please select exactly one row to proceed.' });
             return;
         }
 
+        const selectedIndex = multiSelectSelectedIndexes[0];
+
         this.eventAggregator.publish(EVENTS.SHOW_CONFIRMATION_DIALOG, {
-            message: `You have selected ${multiSelectSelectedIndexes.length} row(s). What would you like to do?`,
+            message: `Perform action on row ${selectedIndex + 1}. What would you like to do?`,
             layout: [[
-                { type: 'button', text: 'Delete Rows', className: 'secondary', callback: () => {
-                    this.stateService.dispatch(quoteActions.deleteMultipleRows(multiSelectSelectedIndexes));
+                { type: 'button', text: 'Delete Row', className: 'secondary', callback: () => {
+                    this.stateService.dispatch(quoteActions.deleteRow(selectedIndex));
                     this.focusService.focusAfterDelete();
-                }},
-                { type: 'button', text: 'Clear Rows', callback: () => {
-                    this.stateService.dispatch(quoteActions.clearMultipleRows(multiSelectSelectedIndexes));
                     this.stateService.dispatch(uiActions.clearMultiSelectSelection());
+                }},
+                { type: 'button', text: 'Clear Row', callback: () => {
+                    this.stateService.dispatch(quoteActions.clearRow(selectedIndex));
+                    this.focusService.focusAfterClear();
                 }},
                 { type: 'button', text: 'Cancel', className: 'secondary', callback: () => {} }
             ]]
@@ -190,8 +201,14 @@ export class QuickQuoteView {
         }
     }
 
-    // [REVISED] Removed clearMultiSelectSelection to allow highlighting while editing cells.
+    // [REVISED] Remove selection logic from general cell clicks.
     handleTableCellClick({ rowIndex, column }) {
+        // [ADDED] If the user clicks on a 'TYPE' cell, cycle its value.
+        if (column === 'TYPE') {
+            this.handleCycleType(rowIndex);
+            return;
+        }
+        
         this.stateService.dispatch(uiActions.setActiveCell(rowIndex, column));
         
         const item = this._getItems()[rowIndex];
@@ -202,30 +219,32 @@ export class QuickQuoteView {
         }
     }
     
-    // [REVISED] Correctly handle single vs multi-select mode on sequence cell click.
+    // [REVISED] Correctly handle multi-select mode.
     handleSequenceCellClick({ rowIndex }) {
-        const { ui } = this._getState();
-        if (!ui.isMultiSelectMode) {
-            // In single-select mode, clicking a new row clears old selections.
-            this.stateService.dispatch(uiActions.clearMultiSelectSelection());
-        }
+        // Toggle selection for the clicked row without affecting others.
         this.stateService.dispatch(uiActions.toggleMultiSelectSelection(rowIndex));
     }
     
-    // [REVISED] Handle batch cycling for all items, not just the active cell.
-    handleCycleType() {
-        const { ui } = this._getState();
-        if (ui.isMultiSelectMode && ui.multiSelectSelectedIndexes.length > 0) {
-            // If in multi-select mode, this button should do nothing to avoid confusion.
-            this.eventAggregator.publish(EVENTS.SHOW_NOTIFICATION, { message: 'Batch cycle is disabled in multi-select mode. Use the long-press menu instead.' });
-            return;
+    // [REVISED] Handle both single-cell cycling and batch cycling.
+    handleCycleType(rowIndex) {
+        if (typeof rowIndex === 'number') {
+            // Case 1: A specific cell was clicked. Cycle only that row.
+            this.stateService.dispatch(quoteActions.cycleItemType(rowIndex));
+        } else {
+            // Case 2: The 'TYPE' button on the virtual keyboard was pressed. Batch cycle all.
+            const { ui } = this._getState();
+            if (ui.multiSelectSelectedIndexes.length > 0) {
+                this.eventAggregator.publish(EVENTS.SHOW_NOTIFICATION, { message: 'Batch cycle is disabled when rows are selected. Use the long-press menu instead.' });
+                return;
+            }
+            this.stateService.dispatch(quoteActions.batchUpdateFabricType());
         }
-        // Dispatch the batch update action. The reducer will handle the cycling logic.
-        this.stateService.dispatch(quoteActions.batchUpdateFabricType());
         this.stateService.dispatch(uiActions.setSumOutdated(true));
     }
 
     handleToggleMultiSelectMode() {
+        // This button is no longer needed for selection but might have other uses.
+        // For now, we keep the action dispatch.
         this.stateService.dispatch(uiActions.toggleMultiSelectMode());
     }
 
@@ -240,18 +259,32 @@ export class QuickQuoteView {
         this.handleMultiTypeSet();
     }
 
-    // [REVISED] Ensure long-press on TYPE button triggers the multi-set dialog.
     handleTypeButtonLongPress() {
+        // Set selection to all rows with data before showing the dialog
+        const items = this._getItems();
+        const indexesToSelect = items.reduce((acc, item, index) => {
+            if (item.width || item.height) {
+                acc.push(index);
+            }
+            return acc;
+        }, []);
+        
+        if (indexesToSelect.length > 0) {
+            this.stateService.dispatch(uiActions.clearMultiSelectSelection());
+            indexesToSelect.forEach(index => {
+                this.stateService.dispatch(uiActions.toggleMultiSelectSelection(index));
+            });
+        }
+        
         this.handleMultiTypeSet();
     }
 
-    // [REVISED] Rebuild the dialog layout to be a two-column table with descriptions.
     handleMultiTypeSet() {
         const { ui } = this._getState();
         const { multiSelectSelectedIndexes } = ui;
         
         if (multiSelectSelectedIndexes.length === 0) {
-            this.eventAggregator.publish(EVENTS.SHOW_NOTIFICATION, { message: "Please select one or more rows first by clicking on their sequence numbers ('#')." });
+            this.eventAggregator.publish(EVENTS.SHOW_NOTIFICATION, { message: "Please select one or more rows first, or long-press the 'Type' button to select all." });
             return;
         }
 

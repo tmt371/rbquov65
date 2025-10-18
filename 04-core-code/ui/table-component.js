@@ -1,195 +1,123 @@
 // File: 04-core-code/ui/table-component.js
 
 /**
- * @fileoverview A dynamic component for rendering the results table header and body.
+ * @fileoverview A highly reusable component for rendering table data.
+ * It uses a strategy pattern to delegate the rendering of complex cell types.
  */
-
-const COLUMN_CONFIG = {
-    sequence: { header: '#', className: 'col-sequence', dataColumn: 'sequence', cellType: 'td' },
-    width: { header: 'W', className: 'col-w', dataColumn: 'width', cellType: 'td' },
-    height: { header: 'H', className: 'col-h', dataColumn: 'height', cellType: 'td' },
-    TYPE: { header: 'TYPE', className: 'col-type', dataColumn: 'TYPE', cellType: 'td' },
-    Price: { 
-        header: (state) => `<input type="text" class="input-display-cell" id="input-display-cell" value="${state.ui.inputValue || ''}" readonly>`, 
-        className: 'input-display-header col-price', 
-        dataColumn: 'Price',
-        cellType: 'th'
-    },
-    location: { header: 'Location', className: 'col-location', dataColumn: 'location', cellType: 'td' },
-    fabric: { header: 'F-Name', className: 'col-fabric', dataColumn: 'fabric', cellType: 'td' },
-    color: { header: 'F-Color', className: 'col-color', dataColumn: 'color', cellType: 'td' },
-    over: { header: 'Over', className: 'col-over', dataColumn: 'over', cellType: 'td' },
-    oi: { header: 'O/I', className: 'col-oi', dataColumn: 'oi', cellType: 'td' },
-    lr: { header: 'L/R', className: 'col-lr', dataColumn: 'lr', cellType: 'td' },
-    fabricTypeDisplay: { header: 'Type', className: 'col-type', dataColumn: 'fabricType', cellType: 'td' },
-    dual: { header: 'Dual', className: 'col-dual', dataColumn: 'dual', cellType: 'td' },
-    chain: { header: 'Chain', className: 'col-chain', dataColumn: 'chain', cellType: 'td' },
-    winder: { header: 'Winder', className: 'col-winder', dataColumn: 'winder', cellType: 'td' },
-    motor: { header: 'Motor', className: 'col-motor', dataColumn: 'motor', cellType: 'td' },
-};
-
+import { DOM_IDS } from '../config/constants.js';
 
 export class TableComponent {
-    constructor(tableElement) {
-        if (!tableElement) {
-            throw new Error("Table element is required for TableComponent.");
+    constructor() {
+        this.table = document.getElementById(DOM_IDS.RESULTS_TABLE);
+        if (!this.table) {
+            throw new Error(`Element with ID '${DOM_IDS.RESULTS_TABLE}' not found.`);
         }
-        this.tableElement = tableElement;
-        this.cellRenderers = this._createCellRenderers();
+        // Ensure tbody exists or create it.
+        this.tbody = this.table.querySelector('tbody');
+        if (!this.tbody) {
+            this.tbody = document.createElement('tbody');
+            this.table.appendChild(this.tbody);
+        }
+
+        // --- Cell Rendering Strategies ---
+        this.cellRenderers = {
+            default: (item, column) => item[column] ?? '',
+            price: (item) => (typeof item.linePrice === 'number' ? `$${item.linePrice.toFixed(2)}` : ''),
+            fabricTypeDisplay: (item) => {
+                if (!item.fabricType) return '';
+                const typeClass = `type-${item.fabricType.toLowerCase()}`;
+                return `<span class="${typeClass}">${item.fabricType}</span>`;
+            }
+        };
+
         console.log("TableComponent (Refactored with Renderer Strategy) Initialized.");
     }
 
     render(state) {
-        const currentProductKey = state.quoteData.currentProduct;
-        const items = state.quoteData.products[currentProductKey].items;
+        if (!state) return;
+        const { ui, quoteData } = state;
+        const { 
+            visibleColumns, 
+            activeCell, 
+            inputValue, 
+            multiSelectSelectedIndexes, 
+            activeEditMode,
+            dualChainMode,
+            driveAccessoryMode,
+            targetCell,
+            lfSelectedRowIndexes
+        } = ui;
+        
+        const productKey = quoteData.currentProduct;
+        const items = quoteData.products[productKey].items;
+        const { lfModifiedRowIndexes } = quoteData.uiMetadata;
 
-        const { visibleColumns, isLocationEditMode, targetCell } = state.ui;
-
-        this.tableElement.innerHTML = '';
-
-        const thead = this.tableElement.createTHead();
-        const headerRow = thead.insertRow();
-        visibleColumns.forEach(key => {
-            const config = COLUMN_CONFIG[key];
-            if (!config) return;
-
-            const cell = document.createElement(config.cellType);
-            cell.className = config.className;
-            
-            if (typeof config.header === 'function') {
-                cell.innerHTML = config.header(state);
-            } else {
-                cell.innerHTML = config.header;
+        this.tbody.innerHTML = items.map((item, index) => {
+            let rowClass = '';
+            if (targetCell && targetCell.rowIndex === index && activeEditMode === 'K1') {
+                rowClass += ' target-row-highlight';
             }
-            headerRow.appendChild(cell);
-        });
-
-        const tbody = this.tableElement.createTBody();
-        if (items.length === 0 || (items.length === 1 && !items[0].width && !items[0].height)) {
-            const row = tbody.insertRow();
-            const cell = row.insertCell();
-            cell.colSpan = visibleColumns.length;
-            cell.textContent = 'Enter dimensions to begin...';
-            cell.style.textAlign = 'left';
-            cell.style.color = '#888';
-            return;
-        }
-
-        items.forEach((item, index) => {
-            const row = tbody.insertRow();
-            row.dataset.rowIndex = index;
-
-            if (isLocationEditMode && targetCell && index === targetCell.rowIndex) {
-                row.classList.add('target-row-highlight');
+            if (lfSelectedRowIndexes.includes(index)) {
+                rowClass += ' lf-selection-highlight';
+            }
+            if (lfModifiedRowIndexes.includes(index)) {
+                rowClass += ' is-lf-modified';
             }
 
-            visibleColumns.forEach(key => {
-                const config = COLUMN_CONFIG[key];
-                if (!config) return;
+            const cells = visibleColumns.map(column => {
+                let cellContent;
+                let cellClass = this._getCellClass(column, item, index, state);
+    
+                if (column === 'sequence') {
+                    const isLastRow = index === items.length - 1;
+                    // The class that the event handler looks for to make the cell clickable.
+                    const clickableClass = isLastRow ? '' : 'sequence-cell';
+                    if (isLastRow) {
+                        cellClass += ' selection-disabled'; // Add styling for disabled appearance.
+                    }
+                    cellContent = `<div class="${clickableClass}" data-row-index="${index}">${index + 1}</div>`;
+                } else {
+                    const renderer = this.cellRenderers[column] || this.cellRenderers.default;
+                    cellContent = renderer(item, column, index, state);
+                }
 
-                const cell = row.insertCell();
-                cell.className = config.className;
-                cell.dataset.column = config.dataColumn;
-                
-                this._renderCellContent(cell, key, item, index, state);
-            });
-        });
+                // Render the live input value in the active cell.
+                if (activeCell && activeCell.rowIndex === index && activeCell.column === column) {
+                    if (column === 'width' || column === 'height') {
+                        cellContent = inputValue;
+                    }
+                }
+    
+                return `<td class="${cellClass}" data-row-index="${index}" data-column="${column}">${cellContent}</td>`;
+            }).join('');
+    
+            return `<tr class="${rowClass}">${cells}</tr>`;
+        }).join('');
     }
 
-    _renderCellContent(cell, key, item, index, state) {
-        const { targetCell } = state.ui;
-        const { lfModifiedRowIndexes } = state.quoteData.uiMetadata || { lfModifiedRowIndexes: [] };
+    _getCellClass(column, item, index, state) {
+        const { ui } = state;
+        const { activeCell, multiSelectSelectedIndexes, driveAccessoryMode, dualChainMode, activeEditMode } = ui;
 
-        if (targetCell && index === targetCell.rowIndex && key === targetCell.column) {
-            cell.classList.add('target-cell');
+        let classes = `col-${column.toLowerCase()}`;
+        
+        if (activeCell && activeCell.rowIndex === index && activeCell.column === column) {
+            classes += ' active-input-cell';
+        }
+        if (multiSelectSelectedIndexes.includes(index)) {
+            classes += ' multi-selected-row';
+        }
+        
+        if (column === 'price') classes += ' price-cell';
+
+        if (driveAccessoryMode === 'winder' && column === 'winder' && item.winder) classes += ' winder-cell-active';
+        if (driveAccessoryMode === 'motor' && column === 'motor' && item.motor) classes += ' motor-cell-active';
+        if (dualChainMode === 'dual' && column === 'dual' && item.dual) classes += ' dual-cell-active';
+        
+        if (activeEditMode === 'K3' && ['over', 'oi', 'lr'].includes(column)) {
+            classes += ' target-cell';
         }
 
-        if (lfModifiedRowIndexes.includes(index) && (key === 'fabric' || key === 'color')) {
-            cell.classList.add('is-lf-modified');
-        }
-
-        const renderer = this.cellRenderers[key] || this.cellRenderers.default;
-        if (renderer) {
-            renderer(cell, item, index, state);
-        }
-    }
-
-    _createCellRenderers() {
-        return {
-            sequence: (cell, item, index, state) => {
-                // [MODIFIED] Removed obsolete state flags 'selectedRowIndex' and 'isMultiSelectMode'
-                const { multiSelectSelectedIndexes, lfSelectedRowIndexes } = state.ui;
-                const currentProductKey = state.quoteData.currentProduct;
-                const items = state.quoteData.products[currentProductKey].items;
-
-                cell.textContent = index + 1;
-                const isLastRowEmpty = (index === items.length - 1) && (!item.width && !item.height);
-                
-                // [MODIFIED] Simplified highlighting logic to rely only on multiSelectSelectedIndexes
-                if (lfSelectedRowIndexes.includes(index)) {
-                    cell.classList.add('lf-selection-highlight');
-                } else if (isLastRowEmpty) {
-                    cell.classList.add('selection-disabled');
-                } else if (multiSelectSelectedIndexes.includes(index)) {
-                    // Use a single, consistent class for any selection (single or multi)
-                    cell.classList.add('selected-row-highlight');
-                }
-            },
-            width: (cell, item, index, state) => {
-                const { activeCell } = state.ui;
-                cell.textContent = item.width || '';
-                if (activeCell && index === activeCell.rowIndex && activeCell.column === 'width') cell.classList.add('active-input-cell');
-            },
-            height: (cell, item, index, state) => {
-                const { activeCell } = state.ui;
-                cell.textContent = item.height || '';
-                if (activeCell && index === activeCell.rowIndex && activeCell.column === 'height') cell.classList.add('active-input-cell');
-            },
-            TYPE: (cell, item, index, state) => {
-                const { activeCell } = state.ui;
-                cell.textContent = (item.width || item.height) ? (item.fabricType || '') : '';
-                
-                const typeClassMap = {
-                    'B2': 'type-b2', 'B3': 'type-b3', 'B4': 'type-b4',
-                    'B5': 'type-b5', 'SN': 'type-sn'
-                };
-                if (typeClassMap[item.fabricType]) {
-                    cell.classList.add(typeClassMap[item.fabricType]);
-                }
-
-                if (activeCell && index === activeCell.rowIndex && activeCell.column === 'TYPE') cell.classList.add('active-input-cell');
-            },
-            Price: (cell, item) => {
-                cell.textContent = item.linePrice ? item.linePrice.toFixed(2) : '';
-                cell.classList.add('price-cell');
-            },
-            fabricTypeDisplay: (cell, item) => {
-                cell.textContent = item.fabricType || '';
-
-                const typeClassMap = {
-                    'B2': 'type-b2', 'B3': 'type-b3', 'B4': 'type-b4',
-                    'B5': 'type-b5', 'SN': 'type-sn'
-                };
-                if (typeClassMap[item.fabricType]) {
-                    cell.classList.add(typeClassMap[item.fabricType]);
-                }
-            },
-            dual: (cell, item) => {
-                cell.textContent = item.dual || '';
-                cell.classList.toggle('dual-cell-active', item.dual === 'D');
-            },
-            winder: (cell, item) => {
-                cell.textContent = item.winder || '';
-                cell.classList.toggle('winder-cell-active', !!item.winder);
-            },
-            motor: (cell, item) => {
-                cell.textContent = item.motor || '';
-                cell.classList.toggle('motor-cell-active', !!item.motor);
-            },
-            default: (cell, item, index, state) => {
-                const columnKey = cell.dataset.column;
-                cell.textContent = item[columnKey] || '';
-            }
-        };
+        return classes;
     }
 }
