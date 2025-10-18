@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detailed Item List</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 10pt; color: #333; }
+        .detail-container { max-width: 800px; margin: 20px auto; padding: 20px; }
+        .detail-header { text-align: center; margin-bottom: 20px; }
+        .detail-header h2 { margin: 0; font-size: 16pt; }
+        .detail-table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+        .detail-table th, .detail-table td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+        .detail-table th { background-color: #f2f2f2; font-weight: bold; }
+        .detail-table .text-left { text-align: left; }
+        .detail-table .price { text-align: right; }
+    </style>
+</head>
+<body>
+    <div class="detail-container">
+        <div class="detail-header">
+            <h2>Detailed Item List</h2>
+        </div>
+        <table class="detail-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Location</th>
+                    <th>Width</th>
+                    <th>Height</th>
+                    <th>Type</th>
+                    <th>F-Name</th>
+                    <th>F-Color</th>
+                    <th>Over</th>
+                    <th>O/I</th>
+                    <th>L/R</th>
+                    <th>Dual</th>
+                    <th>Chain</th>
+                    <th>Winder</th>
+                    <th>Motor</th>
+                    <th class="price">Price</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{item_rows}}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
