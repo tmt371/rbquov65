@@ -37,6 +37,12 @@ export const deleteMultipleRows = (indexesToDelete) => ({
     payload: { indexesToDelete },
 });
 
+// [ADDED] New action creator for clearing multiple rows.
+export const clearMultipleRows = (indexesToClear) => ({
+    type: QUOTE_ACTION_TYPES.CLEAR_MULTIPLE_ROWS,
+    payload: { indexesToClear },
+});
+
 // --- Individual Item Properties ---
 export const updateItemValue = (rowIndex, column, value) => ({
     type: QUOTE_ACTION_TYPES.UPDATE_ITEM_VALUE,

@@ -71,6 +71,7 @@ export const QUOTE_ACTION_TYPES = {
     DELETE_ROW: 'quote/deleteRow',
     CLEAR_ROW: 'quote/clearRow',
     DELETE_MULTIPLE_ROWS: 'quote/deleteMultipleRows',
+    CLEAR_MULTIPLE_ROWS: 'quote/clearMultipleRows', // [ADDED] For clearing multiple rows via dialog
 
     // Individual Item Properties
     UPDATE_ITEM_VALUE: 'quote/updateItemValue',
