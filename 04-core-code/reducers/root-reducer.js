@@ -217,27 +217,6 @@ function quoteReducer(state, action, { productFactory, configManager }) {
             return state;
         }
 
-        // [ADDED] Logic to handle clearing multiple rows at once.
-        case QUOTE_ACTION_TYPES.CLEAR_MULTIPLE_ROWS: {
-            const { indexesToClear } = action.payload;
-            if (!indexesToClear || indexesToClear.length === 0) return state;
-            
-            items = [...productData.items];
-            const productStrategy = productFactory.getProductStrategy(productKey);
-
-            indexesToClear.forEach(index => {
-                const itemToClear = items[index];
-                if (itemToClear) {
-                    const newItem = productStrategy.getInitialItemData();
-                    newItem.itemId = itemToClear.itemId; // Preserve itemId
-                    items[index] = newItem;
-                }
-            });
-            
-            productData = { ...productData, items };
-            return { ...state, products: { ...state.products, [productKey]: productData } };
-        }
-
         case QUOTE_ACTION_TYPES.UPDATE_ITEM_VALUE: {
             items = [...productData.items];
             const { rowIndex, column, value } = action.payload;

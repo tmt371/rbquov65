@@ -120,29 +120,13 @@ export class QuickQuoteView {
         this.focusService.focusAfterDelete();
     }
 
-    // [REVISED] Show confirmation dialog for clear/delete actions.
     handleClearRow() {
         const { ui } = this._getState();
         const { multiSelectSelectedIndexes } = ui;
-        if (multiSelectSelectedIndexes.length === 0) {
-            this.eventAggregator.publish(EVENTS.SHOW_NOTIFICATION, { message: 'Please select one or more rows first.' });
-            return;
-        }
-
-        this.eventAggregator.publish(EVENTS.SHOW_CONFIRMATION_DIALOG, {
-            message: `You have selected ${multiSelectSelectedIndexes.length} row(s). What would you like to do?`,
-            layout: [[
-                { type: 'button', text: 'Delete Rows', className: 'secondary', callback: () => {
-                    this.stateService.dispatch(quoteActions.deleteMultipleRows(multiSelectSelectedIndexes));
-                    this.focusService.focusAfterDelete();
-                }},
-                { type: 'button', text: 'Clear Rows', callback: () => {
-                    this.stateService.dispatch(quoteActions.clearMultipleRows(multiSelectSelectedIndexes));
-                    this.stateService.dispatch(uiActions.clearMultiSelectSelection());
-                }},
-                { type: 'button', text: 'Cancel', className: 'secondary', callback: () => {} }
-            ]]
-        });
+        if (multiSelectSelectedIndexes.length !== 1) return;
+        
+        this.stateService.dispatch(quoteActions.clearRow(multiSelectSelectedIndexes[0]));
+        this.focusService.focusAfterClear();
     }
 
     handleSaveToFile() {
@@ -190,9 +174,9 @@ export class QuickQuoteView {
         }
     }
 
-    // [REVISED] Removed clearMultiSelectSelection to allow highlighting while editing cells.
     handleTableCellClick({ rowIndex, column }) {
         this.stateService.dispatch(uiActions.setActiveCell(rowIndex, column));
+        this.stateService.dispatch(uiActions.clearMultiSelectSelection());
         
         const item = this._getItems()[rowIndex];
         if (item && (column === 'width' || column === 'height')) {
@@ -202,26 +186,16 @@ export class QuickQuoteView {
         }
     }
     
-    // [REVISED] Correctly handle single vs multi-select mode on sequence cell click.
     handleSequenceCellClick({ rowIndex }) {
-        const { ui } = this._getState();
-        if (!ui.isMultiSelectMode) {
-            // In single-select mode, clicking a new row clears old selections.
-            this.stateService.dispatch(uiActions.clearMultiSelectSelection());
-        }
         this.stateService.dispatch(uiActions.toggleMultiSelectSelection(rowIndex));
     }
     
-    // [REVISED] Handle batch cycling for all items, not just the active cell.
     handleCycleType() {
         const { ui } = this._getState();
-        if (ui.isMultiSelectMode && ui.multiSelectSelectedIndexes.length > 0) {
-            // If in multi-select mode, this button should do nothing to avoid confusion.
-            this.eventAggregator.publish(EVENTS.SHOW_NOTIFICATION, { message: 'Batch cycle is disabled in multi-select mode. Use the long-press menu instead.' });
-            return;
-        }
-        // Dispatch the batch update action. The reducer will handle the cycling logic.
-        this.stateService.dispatch(quoteActions.batchUpdateFabricType());
+        const { activeCell } = ui;
+        if (!activeCell || activeCell.column !== 'TYPE') return;
+
+        this.stateService.dispatch(quoteActions.cycleItemType(activeCell.rowIndex));
         this.stateService.dispatch(uiActions.setSumOutdated(true));
     }
 
@@ -237,15 +211,13 @@ export class QuickQuoteView {
     handleTypeCellLongPress({ rowIndex }) {
         this.stateService.dispatch(uiActions.clearMultiSelectSelection());
         this.stateService.dispatch(uiActions.toggleMultiSelectSelection(rowIndex));
-        this.handleMultiTypeSet();
+        this.eventAggregator.publish(EVENTS.USER_REQUESTED_MULTI_TYPE_SET);
     }
 
-    // [REVISED] Ensure long-press on TYPE button triggers the multi-set dialog.
     handleTypeButtonLongPress() {
-        this.handleMultiTypeSet();
+        this.eventAggregator.publish(EVENTS.USER_REQUESTED_MULTI_TYPE_SET);
     }
 
-    // [REVISED] Rebuild the dialog layout to be a two-column table with descriptions.
     handleMultiTypeSet() {
         const { ui } = this._getState();
         const { multiSelectSelectedIndexes } = ui;
@@ -256,28 +228,19 @@ export class QuickQuoteView {
         }
 
         const fabricTypes = this.configManager.getFabricTypeSequence();
-        const layout = [];
-
+        const layout = [[]];
         fabricTypes.forEach(type => {
-            const matrix = this.configManager.getPriceMatrix(type);
-            const description = matrix ? matrix.name : 'Unknown';
-
-            layout.push([
-                {
-                    type: 'button',
-                    text: type,
-                    callback: () => {
-                        this.stateService.dispatch(quoteActions.batchUpdateFabricTypeForSelection(multiSelectSelectedIndexes, type));
-                        this.stateService.dispatch(uiActions.setSumOutdated(true));
-                        this.stateService.dispatch(uiActions.clearMultiSelectSelection());
-                    }
-                },
-                {
-                    type: 'text',
-                    text: description,
-                    className: 'text-cell'
+            layout[0].push({
+                type: 'button',
+                text: type,
+                callback: () => {
+                    multiSelectSelectedIndexes.forEach(index => {
+                        this.stateService.dispatch(quoteActions.setItemType(index, type));
+                    });
+                    this.stateService.dispatch(uiActions.setSumOutdated(true));
+                    this.stateService.dispatch(uiActions.clearMultiSelectSelection());
                 }
-            ]);
+            });
         });
         
         this.eventAggregator.publish(EVENTS.SHOW_CONFIRMATION_DIALOG, {
