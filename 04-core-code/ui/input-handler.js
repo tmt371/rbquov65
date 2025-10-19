@@ -210,19 +210,11 @@ export class InputHandler {
                 this.isLongPress = false;
             };
 
-            table.addEventListener('mousedown', startPress);
-            table.addEventListener('touchstart', startPress, { passive: false });
-            
-            table.addEventListener('mouseup', endPress);
-            
-            table.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                endPress(e);
-            });
-
-            table.addEventListener('mouseleave', () => {
+            table.addEventListener('pointerdown', startPress);
+            table.addEventListener('pointerup', endPress);
+            table.addEventListener('pointerleave', () => {
                 clearTimeout(this.longPressTimer);
-            }, true);
+            });
         }
     }
 }
