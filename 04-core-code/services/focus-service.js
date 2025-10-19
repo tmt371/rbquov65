@@ -79,8 +79,8 @@ export class FocusService {
         }
         
         column = navigableColumns[columnIndex];
-        this.stateService.dispatch(uiActions.setActiveCell(rowIndex, column));
         this.stateService.dispatch(uiActions.clearMultiSelectSelection());
+        this.stateService.dispatch(uiActions.setActiveCell(rowIndex, column));
         
         const currentItem = items[rowIndex];
         if (currentItem && (column === 'width' || column === 'height')) {

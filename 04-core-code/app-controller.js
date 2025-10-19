@@ -53,6 +53,7 @@ export class AppController {
         this.eventAggregator.subscribe(EVENTS.TYPE_CELL_LONG_PRESSED, (data) => delegate('handleTypeCellLongPress', data));
         this.eventAggregator.subscribe(EVENTS.TYPE_BUTTON_LONG_PRESSED, (data) => delegate('handleTypeButtonLongPress', data));
         this.eventAggregator.subscribe(EVENTS.USER_REQUESTED_MULTI_TYPE_SET, () => delegate('handleMultiTypeSet'));
+        this.eventAggregator.subscribe(EVENTS.CLEAR_MULTI_SELECT_SELECTION, () => delegate('handleClearMultiSelectSelection'));
     }
 
     _subscribeDetailViewEvents() {
