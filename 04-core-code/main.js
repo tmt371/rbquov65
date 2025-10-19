@@ -85,6 +85,7 @@ class App {
         eventAggregator.subscribe(EVENTS.APP_READY, () => {
             setTimeout(() => {
                 eventAggregator.publish(EVENTS.FOCUS_CELL, { rowIndex: 0, column: 'width' });
+                eventAggregator.publish(EVENTS.CLEAR_MULTI_SELECT_SELECTION);
             }, 100);
         });
 

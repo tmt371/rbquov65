@@ -175,8 +175,8 @@ export class QuickQuoteView {
     }
 
     handleTableCellClick({ rowIndex, column }) {
-        this.stateService.dispatch(uiActions.setActiveCell(rowIndex, column));
         this.stateService.dispatch(uiActions.clearMultiSelectSelection());
+        this.stateService.dispatch(uiActions.setActiveCell(rowIndex, column));
         
         const item = this._getItems()[rowIndex];
         if (item && (column === 'width' || column === 'height')) {
@@ -188,6 +188,10 @@ export class QuickQuoteView {
     
     handleSequenceCellClick({ rowIndex }) {
         this.stateService.dispatch(uiActions.toggleMultiSelectSelection(rowIndex));
+    }
+
+    handleClearMultiSelectSelection() {
+        this.stateService.dispatch(uiActions.clearMultiSelectSelection());
     }
     
     handleCycleType() {
